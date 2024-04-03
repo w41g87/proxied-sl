@@ -401,9 +401,11 @@ You may also want to setup [Certificate Authority Authorization (CAA)](#caa) at 
 
 ### Reverse proxy settings
 
-Port `25` of the postfix-inbound container needs to be exposed to receive mail. This can be achieved using stream from npm's web interface. 
+The webportal of the SimpleLogin app listens on port `7777`. In npm create a proxy host that points `app.mydomain.com` to `sl-app:7777` will enable the webUI to be visited from outside.
 
-Additionally, the IP address of the original host need to be passed to postfix for the blocklist to be effective. To do so we need to enable PROXY protocol in the configuration. Locate the configuration of the Port `25` stream (for npm it is under `<npm_directory>/data/nginx/stream/<stream_index>.conf`) and insert the following in to the `server { }` block
+Port `25` of the postfix-inbound container needs to be exposed to receive mail. This can be achieved using stream from npm's web interface by forwarding incoming port `25` to `postfix-inbound:25`.
+
+Additionally, the IP address of the original host need to be passed to postfix for the blocklist to be effective. To do so we need to enable PROXY protocol in the configuration. Locate the configuration of the port `25` stream (for npm it is under `<npm_directory>/data/nginx/stream/<stream_index>.conf`) and insert the following into the `server { }` block
 ```text
   proxy_protocol on;
 ```
