@@ -1,17 +1,16 @@
-version: "3.8"
-
 services:
 
   ## SIMPLE LOGIN
   ## ============
-  
+
   postgres:
     image: postgres:12.1
     container_name: sl-db
     env_file: .env
+    command: -p 5432
     healthcheck:
-      test: [ "CMD", "pg_isready" ]
-      interval: 10s
+      test: [ "CMD", "pg_isready", "-p", "5432" ]
+      interval: 5s
       retries: 3
       start_period: 1s
     volumes:
@@ -56,6 +55,9 @@ services:
       - ./dkim.key:/dkim.key
       - ./dkim.pub.key:/dkim.pub.key
     restart: unless-stopped
+    networks:
+      - default
+      - proxy
     depends_on:
       init:
         condition: service_completed_successfully
@@ -89,3 +91,4 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
+

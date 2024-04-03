@@ -1,0 +1,7 @@
+spamhaus_api.sbl.dq.spamhaus.net=127.0.0.[2..255]      $rbl_code Service unavailable; $rbl_class [$rbl_what] blocked using sbl.spamhaus.org${rbl_reason?; $rbl_reason}
+spamhaus_api.xbl.dq.spamhaus.net=127.0.0.[2..255]      $rbl_code Service unavailable; $rbl_class [$rbl_what] blocked using xbl.spamhaus.org${rbl_reason?; $rbl_reason}
+spamhaus_api.pbl.dq.spamhaus.net=127.0.0.[2..255]      $rbl_code Service unavailable; $rbl_class [$rbl_what] blocked using pbl.spamhaus.org${rbl_reason?; $rbl_reason}
+spamhaus_api.sbl-xbl.dq.spamhaus.net=127.0.0.[2..255]  $rbl_code Service unavailable; $rbl_class [$rbl_what] blocked using sbl-xbl.spamhaus.org${rbl_reason?; $rbl_reason}
+spamhaus_api.zen.dq.spamhaus.net=127.0.0.[2..255]      $rbl_code Service unavailable; $rbl_class [$rbl_what] blocked using zen.spamhaus.org${rbl_reason?; $rbl_reason}
+spamhaus_api.dbl.dq.spamhaus.net=127.0.1.[2..99]       $rbl_code Service unavailable; $rbl_class [$rbl_what] blocked using dbl.spamhaus.org${rbl_reason?; $rbl_reason}
+spamhaus_api.zrd.dq.spamhaus.net=127.0.2.[2..24]      $rbl_code Service unavailable; $rbl_class [$rbl_what] blocked using zrd.spamhaus.org${rbl_reason?; $rbl_reason}

@@ -20,4 +20,3 @@ RUN apk --no-cache add postfix postfix-pgsql
 
 COPY ./docker-entrypoint.sh /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]
-
