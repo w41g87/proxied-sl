@@ -1,11 +1,11 @@
 SimpleLogin
 ===========
 
-This is a self-hosted docker-compose configuration for [SimpleLogin](https://simplelogin.io).
+This is a self-hosted docker-compose configuration for [SimpleLogin](https://simplelogin.io). The configuration of this fork is revised to be deployed behind a reverse-proxy like [Nginx Proxy Manager](https://nginxproxymanager.com/). You will be relying on your reverse proxy server for certificate management and redirection.
 
 ## Prerequisites
 
-- a Linux server (either a VM or dedicated server). This doc shows the setup for Ubuntu 18.04 LTS but the steps could be adapted for other popular Linux distributions. As most of components run as Docker container and Docker can be a bit heavy, having at least 2 GB of RAM is recommended. The server needs to have the port 25 (email), 80, 443 (for the webapp), 22 (so you can ssh into it) open.
+- a Linux server (either a VM or dedicated server). This doc shows the setup for Ubuntu 18.04 LTS but the steps could be adapted for other popular Linux distributions. As most of components run as Docker container and Docker can be a bit heavy, having at least 2 GB of RAM is recommended. The server needs to have the port 25 (email) open, the rest of the ports can be forwarded by the reverse proxy.
 
 - a domain for which you can config the DNS. It could be a sub-domain. In the rest of the doc, let's say it's `mydomain.com` for the email and `app.mydomain.com` for SimpleLogin webapp. Please make sure to replace these values by your domain name and subdomain name whenever they appear in the doc. A trick we use is to download this README file on your computer and replace all `mydomain.com` and `app.mydomain.com` occurrences by your domain.
 
@@ -79,6 +79,7 @@ Setting up DKIM is highly recommended to reduce the chance for your emails endin
 First you need to generate a private and public key for DKIM:
 
 ```bash
+# in proxied-sl/
 openssl genrsa -traditional -out dkim.key 1024
 openssl rsa -in dkim.key -pubout -out dkim.pub.key
 ```
@@ -203,7 +204,7 @@ Use [SSLMate’s CAA Record Generator](https://sslmate.com/caa/) to create a **C
 
 - `flags`: `0`
 - `tag`: `issue`
-- `value`: `"sectigo.com"`
+- `value`: `"<replace_with_your_issuer>"`
 
 To verify if the DNS works, the following command:
 
@@ -214,12 +215,13 @@ dig @1.1.1.1 mydomain.com caa
 should return:
 
 ```
-mydomain.com.	3600	IN	CAA	0 issue "sectigo.com"
+mydomain.com.	3600	IN	CAA	0 issue "<replace_with_your_issuer>"
 ```
 
 **Warning**: setting up a CAA record will restrict which certificate authority can successfully issue SSL certificates for your domain.
 This will prevent certificate issuance from Let’s Encrypt staging servers. You may want to differ this DNS record until after SSL certificates are successfully issued for your domain.
 
+<s>
 
 ### MTA-STS
 
@@ -278,6 +280,7 @@ should return a result similar to this one:
 ```
 _mta-sts.mydomain.com.	3600	IN	TXT	"v=STSv1; id=1689416399"
 ```
+</s>(currently under work)
 
 ### TLSRPT
 
@@ -305,6 +308,10 @@ should return a result similar to this one:
 _smtp._tls.mydomain.com.	3600	IN	TXT	"v=TSLRPTv1; rua=mailto:tls-reports@mydomain.com"
 ```
 
+## Spamhaus DQS
+
+Spamhaus has recently blocked queries from open DNS resolvers. If you are querying from public DNS (like 1.1.1.1 or 8.8.8.8), it will result in postfix accepting/rejecting all incoming mails. If you are an individual hosting SimpleLogin, you can [sign up](https://www.spamhaus.com/free-trial/sign-up-for-a-free-data-query-service-account/) for their free data query service. Please save the API key provided to you by Spamhaus. If you wish not to use Spamhaus blocklist, please comment out the lines in `./postfix/conf.d/main_i.cf.tpl` containing `spamhaus` urls.
+
 ## Docker
 
 If you don't already have Docker installed on your server, please follow the steps on [Docker CE for Ubuntu](https://docs.docker.com/v17.12/install/linux/docker-ce/ubuntu/) to install Docker.
@@ -330,14 +337,21 @@ Enable IPv6 for [the default bridge network](https://docs.docker.com/config/daem
 This procedure will guide you through running the entire stack using Docker containers.
 This includes:
 
-- nginx
-- [acme.sh](https://acme.sh) to request and issue SSL certs.
 - The [SimpleLogin app](https://github.com/simple-login/app) containers
 - postfix
 
+### Create Docker networks
+
+This project utilizes the bridge network in Docker to isolate the SimpleLogin backend from the proxy. We create two Docker networks, one internal between SimpleLogin and Postfix servers, another external to be connected with the reverse proxy. Replace `<internal_network_name>` and `<external_network_name>` with the names of your choice:
+```bash
+docker network create <internal_network_name>
+docker network create <external_network_name>
+```
+<b>You will need to update your proxy's `docker-compose.yaml` file to include the `<external_network_name>`</b>
+
 ### Run SimpleLogin Docker containers
 
-1. Clone this repository in `/opt/simplelogin`
+1. Clone this repository in `/<directory_you_prefer>/simplelogin`
 1. Copy `.env.example` to `.env` and set appropriate values.
 
 - set the `DOMAIN` variable to your domain.
@@ -345,77 +359,34 @@ This includes:
 - set the `POSTGRES_USER` variable to match the postgres credentials.
 - set the `POSTGRES_PASSWORD` to match the postgres credentials.
 - set the `FLASK_SECRET` to an arbitrary secret key.
-
-The SSL certs are issued by the ACME server using either:
-
-- HTTP-01 ACME challenge
-- DNS-01 ACME challenge using acme.sh DNS integration
-
-Set the following variables in `.env` to appropriate values:
-
-- set the `LE_STAGING` to `true` or `false`.
-- set the `ACME_CHALLENGE` variable to either `DNS-01` (default) or `HTTP-01`.
-- set the `ACME_SERVER` variable to any of the [supported servers by acme.sh](https://github.com/acmesh-official/acme.sh/wiki/Server). Default value is `zerossl`.
-
-If you are using DNS-01 ACME challenge, set `ACME_SH_DNS_API` to one of the
-[supported acme.sh DNS API](https://github.com/acmesh-official/acme.sh#8-automatic-dns-api-integration) plugins.
-
-This repository currently supports
-[Microsoft Azure](https://github.com/acmesh-official/acme.sh/wiki/dnsapi#37-use-azure-dns
-) and
-[Cloudflare](https://github.com/acmesh-official/acme.sh/wiki/dnsapi#a-using-a-restrictive-api-token) DNS integrations.
-
-
-If using Microsoft Azure, update the following values in `.env`:
-
-- set `AZUREDNS_TENANTID` to the Azure tenant hosting the domain DNS zone.
-- set `AZUREDNS_SUSCRIPTIONID` to the Azure subscription hosting the domain DNS zone.
-- set `AZUREDNS_CLIENTID` to the client id of a service principal with permissions to update the DNS zone.
-- set `AZUREDNS_CLIENTSECRET` to the client secret of a service principal with permissions to update the DNS zone.
-
-If using Cloudflare, update the following values in `.env`:
-
-- set `CF_Token` to the Cloudflare API token.
-- set `CF_Zone_ID` to the Cloudflare DNS Zone identifier.
-- set `CF_Account_ID` to your Cloudflare account identifier.
-
-
-The SSL certificates will be available at the following locations:
-
-- `/etc/acme.sh/*.mydomain.com_ecc/fullchain.cer`
-- `/etc/acme.sh/*.mydomain.com_ecc/*.domain.tld.key`
-
-
-
-If you are using HTTP-01 challenge, update the SSL certificate and key locations in following files:
-
-- `nginx/conf.d/default.conf.tpl`
-- `postfix/conf.d/main.cf.tpl`
-
-Specifically, using HTTP-01, the SSL certificates are available at the following locations:
-
-- `/etc/acme.sh/mydomain.com_ecc/fullchain.cer`
-- `/etc/acme.sh/mydomain.com_ecc/domain.tld.key`
-
+- set the `INT_NET` to your internal Docker network name.
+- set the `EXT_NET` to your external Docker network name
+- set the `SPAMHAUS_API` to your API key for Spamhaus DQS
+- set the `CERT_DIR` to the directory of your reverse proxy's certification files. (e.g. for npm using Let's Encrypt it is `<npm_directory>/letsencrypt/`)
+- set the `PRIVKEY_PATH` to the path of the private key file (e.g. for npm using Let's Encrypt it is `live/npm-<index>/pirvkey.pem`)
+- set the `FULLCHAIN_PATH` to the path of the fullchain file (e.g. for npm using Let's Encrypt it is `live/npm-<index>/fullchain.pem`)
 
 3. Run the application:
 
 The `up.sh` shell script updates important configuration files from templates provided in this repository,
 so that it uses the correct domain and postgresql credentials. Here are the template files:
 
-- `acme.sh/www/.well-known/mta-sts.txt.tpl`
-- `nginx/conf.d/default.conf.tpl`
+<s>- `acme.sh/www/.well-known/mta-sts.txt.tpl`
+- `nginx/conf.d/default.conf.tpl`</s>
 - `postfix/conf.d/aliases`
-- `postfix/conf.d/main.cf.tpl`
+- `postfix/conf.d/main_i.cf.tpl`
+- `postfix/conf.d/main_o.cf.tpl`
 - `postfix/conf.dl/pgsql-relay-domains.cf.tpl`
 - `postfix/conf.dl/pgsql-transport-maps.cf.tpl`
 - `postfix/conf.d/virtual.tpl`
 - `postfix/conf.d/virtual-regexp.tpl`
+- `./docker-compose.yaml.tpl`
+- `./postfix-compose.yaml.tpl`
 
 Run the application using the following commands:
 
 ```sh
-./up.sh --build && docker logs -f acme.sh
+./up.sh --build
 ```
 
 If you used the staging server to issue certificates, please review and troubleshoot.
@@ -428,33 +399,16 @@ rm -rf acme.sh/conf.d/
 
 You may also want to setup [Certificate Authority Authorization (CAA)](#caa) at this point.
 
-## Wildcard subdomains
+### Reverse proxy settings
 
-**Note** the following section documents wildcard certificates and subdomains. You may want to use builtin facility within SimpleLogin to achieve the same results.
+Port `25` of the postfix-inbound container needs to be exposed to receive mail. This can be achieved using stream from npm's web interface. 
 
-This repository suppports issuing wildcard certificates for any number of subdomains using Letsencrypt DNS-01 challenge using acme.sh DNS integration.
-It also suppports issuing certificates for the following subdomains `app.mydomain.com` and `mta-sts.mydomain.com` using Letsencrypt HTTP-01 challenge.
-
-If your DNS supports it, you can add a **MX record** to point `*.mydomain.com` to `app.mydomain.com` so that you can receive mails from any number of subdomains.
-To verify, the following command:
-
-```sh
-dig @1.1.1.1 *.mydomain.com mx
+Additionally, the IP address of the original host need to be passed to postfix for the blocklist to be effective. To do so we need to enable PROXY protocol in the configuration. Locate the configuration of the Port `25` stream (for npm it is under `<npm_directory>/data/nginx/stream/<stream_index>.conf`) and insert the following in to the `server { }` block
+```text
+  proxy_protocol on;
 ```
 
-Should return:
-
-```
-*.mydomain.com. 3600  IN  MX    10 app.mydomain.com
-```
-
-Alternatively, you can update the `acme.sh/Dockerfiles/docker-entrypoint.sh` script and update the list of subdomains you want to issue SSL certificates for.
-
-The postfix configuration supports virtual aliases using the `postfix/conf.d/virtual` and `postfix/conf.d/virtual-regexp` files.
-Those files are automatically created on startup based upon the corresponding [`postfix/conf.d/virtual.tpl`](./postfix/conf.d/virtual.tpl)
-and [`postfix/conf.d/virtual-regexp.tpl`](./postfix/conf.d/virtual-regexp.tpl) template files.
-
-The default configuration is as follows:
+Save and restart your reverse proxy and the postfix server should start reading the correct inbound IP.
 
 ### virtual.tpl
 
